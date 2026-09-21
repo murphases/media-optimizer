@@ -26,10 +26,24 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
 
-      - name: Instalar FFmpeg
+      - name: Instalar FFmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Instalar FFmpeg (Windows)
+        if: runner.os == 'Windows'
         uses: FedericoCarboni/setup-ffmpeg@v3
         with:
           ffmpeg-version: release
+
+      - name: Instalar FFmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            brew install ffmpeg
+          fi
 
       - name: Instalar dependências
         run: |
