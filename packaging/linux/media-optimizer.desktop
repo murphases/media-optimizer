@@ -5,6 +5,6 @@ Exec=media-optimizer
 Icon=media-optimizer
 Terminal=false
 Type=Application
-Categories=Graphics;AudioVideo;Photography;
+Categories=Graphics;Photography;
 Keywords=photos;videos;optimizer;converter;heic;raw;takeout;
 StartupWMClass=MediaOptimizer

@@ -21,9 +21,19 @@ cp "${ROOT_DIR}/packaging/linux/AppRun" "${APPDIR}/AppRun"
 chmod +x "${APPDIR}/AppRun"
 
 cp "${ROOT_DIR}/packaging/linux/media-optimizer.desktop" "${APPDIR}/media-optimizer.desktop"
-cp "${ROOT_DIR}/packaging/linux/media-optimizer.desktop" "${APPDIR}/usr/share/applications/"
+cp "${ROOT_DIR}/packaging/linux/media-optimizer.desktop" "${APPDIR}/usr/share/applications/media-optimizer.desktop"
 
-# 3. Baixar/Copiar FFmpeg estático
+# 3. Ícones da aplicação (obrigatório para appimagetool)
+ICON_SRC="${ROOT_DIR}/resources/icon.png"
+if [ ! -f "${ICON_SRC}" ]; then
+    python3 -c "from PIL import Image, ImageDraw; img = Image.new('RGB', (256, 256), color=(41, 128, 185)); img.save('${ROOT_DIR}/resources/icon.png')"
+fi
+
+cp "${ROOT_DIR}/resources/icon.png" "${APPDIR}/media-optimizer.png"
+cp "${ROOT_DIR}/resources/icon.png" "${APPDIR}/.DirIcon"
+cp "${ROOT_DIR}/resources/icon.png" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/media-optimizer.png"
+
+# 4. Baixar/Copiar FFmpeg estático
 python3 "${ROOT_DIR}/scripts/bundle_ffmpeg.py" linux
 if [ -f "${ROOT_DIR}/bin/ffmpeg" ]; then
     cp "${ROOT_DIR}/bin/ffmpeg" "${APPDIR}/bin/"
@@ -31,9 +41,11 @@ if [ -f "${ROOT_DIR}/bin/ffmpeg" ]; then
     chmod +x "${APPDIR}/bin/ffmpeg" "${APPDIR}/bin/ffprobe"
 fi
 
-# 4. Gerar AppImage via appimagetool se disponível
+# 5. Gerar AppImage via appimagetool se disponível
 if command -v appimagetool >/dev/null 2>&1; then
     mkdir -p "${ROOT_DIR}/dist"
+    export ARCH="${ARCH:-x86_64}"
+    export APPIMAGE_EXTRACT_AND_RUN=1
     appimagetool "${APPDIR}" "${ROOT_DIR}/dist/MediaOptimizer-x86_64.AppImage"
     echo "✅ AppImage criado com sucesso em dist/MediaOptimizer-x86_64.AppImage"
 else

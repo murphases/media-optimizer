@@ -239,6 +239,7 @@ def test_ffmpeg_resolver_additional_paths(monkeypatch, tmp_path: Path):
     mock_imageio = MagicMock()
     mock_imageio.get_ffmpeg_exe.return_value = str(local_target)
     with patch("shutil.which", return_value=None), \
+         patch.object(Path, "exists", lambda self: str(self) == str(local_target)), \
          patch.dict(sys.modules, {"imageio_ffmpeg": mock_imageio}):
         assert FFmpegResolver.get_binary_path("ffmpeg") == local_target
 

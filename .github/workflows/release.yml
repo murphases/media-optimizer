@@ -13,6 +13,8 @@ jobs:
   build-windows:
     name: Build Windows (.exe & Installer)
     runs-on: windows-latest
+    env:
+      PYTHONIOENCODING: "utf-8"
     steps:
       - uses: actions/checkout@v4
 
@@ -28,11 +30,18 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Instalar Inno Setup
+        run: choco install innosetup -y --no-progress
+
       - name: Baixar binários estáticos FFmpeg
         run: python scripts/bundle_ffmpeg.py windows
 
       - name: Compilar Executável com PyInstaller
         run: pyinstaller packaging/windows/media_optimizer.spec
+
+      - name: Compilar Instalador Inno Setup
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging/windows/installer.iss
 
       - name: Compactar versão portátil (ZIP)
         shell: pwsh
@@ -44,8 +53,8 @@ jobs:
         with:
           name: windows-binaries
           path: |
-            dist/MediaOptimizer.exe
             dist/MediaOptimizer-Windows-Portable.zip
+            dist/installer/*.exe
 
   build-linux:
     name: Build Linux (AppImage)
@@ -79,7 +88,6 @@ jobs:
         with:
           name: linux-binaries
           path: dist/MediaOptimizer-x86_64.AppImage
-        continue-on-error: true
 
   build-macos:
     name: Build macOS (.dmg)
@@ -106,7 +114,6 @@ jobs:
         with:
           name: macos-binaries
           path: dist/MediaOptimizer-macOS.dmg
-        continue-on-error: true
 
   create-release:
     name: Publicar GitHub Release
@@ -125,8 +132,14 @@ jobs:
           mkdir -p release-assets/
           find dist-release/ -type f \( -name "*.exe" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.dmg" \) -exec cp {} release-assets/ \;
           ls -la release-assets/
+          count=$(ls -1 release-assets/ | wc -l)
+          echo "Total de pacotes compilados: $count"
+          if [ "$count" -lt 3 ]; then
+            echo "ERRO: Nem todos os pacotes foram gerados com sucesso! Abortando release."
+            exit 1
+          fi
 
-      - name: Criar GitHub Release
+      - name: Publicar ou Atualizar GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: release-assets/*

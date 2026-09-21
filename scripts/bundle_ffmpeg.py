@@ -17,6 +17,13 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # Base directories
 ROOT_DIR = Path(__file__).resolve().parent.parent
 BIN_DIR = ROOT_DIR / "bin"
@@ -32,7 +39,7 @@ FFMPEG_URLS = {
 
 def download_file(url: str, dest_path: Path) -> None:
     """Download a file with progress reporting."""
-    print(f"⬇️ Baixando FFmpeg de: {url}")
+    print(f"[DOWNLOAD] Baixando FFmpeg de: {url}")
     dest_path.parent.mkdir(parents=True, exist_ok=True)
 
     def report(count, block_size, total_size):
@@ -41,12 +48,12 @@ def download_file(url: str, dest_path: Path) -> None:
             print(f"\rProgresso: {percent}%", end="", flush=True)
 
     urllib.request.urlretrieve(url, dest_path, reporthook=report)
-    print("\n✅ Download concluído!")
+    print("\n[OK] Download concluido!")
 
 
 def stage_ffmpeg_windows(archive_path: Path, target_dir: Path) -> None:
     """Extract ffmpeg.exe and ffprobe.exe from Windows zip."""
-    print(f"📦 Extraindo binários para {target_dir}...")
+    print(f"[EXTRACAO] Extraindo binarios para {target_dir}...")
     with zipfile.ZipFile(archive_path, "r") as z:
         for member in z.namelist():
             filename = Path(member).name
@@ -54,12 +61,12 @@ def stage_ffmpeg_windows(archive_path: Path, target_dir: Path) -> None:
                 data = z.read(member)
                 dest = target_dir / filename
                 dest.write_bytes(data)
-                print(f"  -> Extraído: {dest}")
+                print(f"  -> Extraido: {dest}")
 
 
 def stage_ffmpeg_linux(archive_path: Path, target_dir: Path) -> None:
     """Extract ffmpeg and ffprobe from Linux tar."""
-    print(f"📦 Extraindo binários para {target_dir}...")
+    print(f"[EXTRACAO] Extraindo binarios para {target_dir}...")
     with tarfile.open(archive_path, "r:*") as t:
         for member in t.getmembers():
             filename = Path(member.name).name
@@ -69,7 +76,7 @@ def stage_ffmpeg_linux(archive_path: Path, target_dir: Path) -> None:
                     dest = target_dir / filename
                     dest.write_bytes(f.read())
                     dest.chmod(0o755)
-                    print(f"  -> Extraído: {dest}")
+                    print(f"  -> Extraido: {dest}")
 
 
 def ensure_bundled_binaries(target_os: str | None = None) -> Path:
@@ -82,23 +89,23 @@ def ensure_bundled_binaries(target_os: str | None = None) -> Path:
     ffprobe_target = BIN_DIR / f"ffprobe{exe_suffix}"
 
     if ffmpeg_target.exists() and ffprobe_target.exists():
-        print(f"✅ Binários do FFmpeg já disponíveis em: {BIN_DIR}")
+        print(f"[OK] Binarios do FFmpeg ja disponiveis em: {BIN_DIR}")
         return BIN_DIR
 
     # Check system PATH as source to copy
     sys_ffmpeg = shutil.which("ffmpeg")
     sys_ffprobe = shutil.which("ffprobe")
     if sys_ffmpeg and sys_ffprobe:
-        print("📋 Copiando FFmpeg e FFprobe do PATH do sistema para bin/...")
+        print("[INFO] Copiando FFmpeg e FFprobe do PATH do sistema para bin/...")
         shutil.copy2(sys_ffmpeg, ffmpeg_target)
         shutil.copy2(sys_ffprobe, ffprobe_target)
-        print("✅ Binários copiados com sucesso!")
+        print("[OK] Binarios copiados com sucesso!")
         return BIN_DIR
 
     # Otherwise download
     url = FFMPEG_URLS.get(current_os)
     if not url:
-        print(f"⚠️ Não há URL automática configurada para: {current_os}")
+        print(f"[AVISO] Nao ha URL automatica configurada para: {current_os}")
         return BIN_DIR
 
     archive_ext = ".zip" if url.endswith(".zip") else ".tar.xz"
@@ -112,7 +119,7 @@ def ensure_bundled_binaries(target_os: str | None = None) -> Path:
             stage_ffmpeg_linux(archive_path, BIN_DIR)
         archive_path.unlink(missing_ok=True)
     except Exception as e:
-        print(f"⚠️ Não foi possível baixar binários automaticamente ({e}).")
+        print(f"[AVISO] Nao foi possivel baixar binarios automaticamente ({e}).")
 
     return BIN_DIR
 
