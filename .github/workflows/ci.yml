@@ -34,9 +34,8 @@ jobs:
 
       - name: Instalar FFmpeg (Windows)
         if: runner.os == 'Windows'
-        uses: FedericoCarboni/setup-ffmpeg@v3
-        with:
-          ffmpeg-version: release
+        run: |
+          choco install ffmpeg -y --no-progress
 
       - name: Instalar FFmpeg (macOS)
         if: runner.os == 'macOS'

@@ -336,6 +336,19 @@ def test_get_telemetry_no_gpu(monkeypatch):
         assert t.recommended_encoder == "libx264"
 
 
+def test_get_telemetry_with_gpu():
+    monitor = HardwareMonitor()
+    def fake_poll(t):
+        t.gpu_available = True
+        t.gpu_name = "NVIDIA GeForce RTX 3080"
+    with patch.object(monitor, "_poll_gpu", side_effect=fake_poll):
+        t = monitor.get_telemetry()
+        assert t.gpu_available is True
+        assert t.gpu_vendor == "NVIDIA"
+        assert t.gpu_series == "RTX"
+        assert t.recommended_encoder == "h264_nvenc"
+
+
 def test_poll_windows_gpu_registry(monkeypatch):
     monitor = HardwareMonitor()
     telemetry = SystemTelemetry()

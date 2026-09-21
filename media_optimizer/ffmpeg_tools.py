@@ -113,7 +113,7 @@ def probe_video(video_path: Path, ffprobe_exe: Optional[Path] = None) -> Optiona
 
     try:
         startupinfo = None
-        if sys.platform == "win32":
+        if sys.platform == "win32" and hasattr(subprocess, "STARTUPINFO"):
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
@@ -179,7 +179,7 @@ def detect_best_video_encoder(ffmpeg_exe: Optional[Path] = None) -> str:
         encoders_to_test = ["h264_nvenc", "h264_qsv", "h264_vaapi", "libx264"]
 
     startupinfo = None
-    if sys.platform == "win32":
+    if sys.platform == "win32" and hasattr(subprocess, "STARTUPINFO"):
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 

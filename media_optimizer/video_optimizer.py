@@ -151,7 +151,7 @@ class VideoOptimizer:
             )
 
             startupinfo = None
-            if sys.platform == "win32":
+            if sys.platform == "win32" and hasattr(subprocess, "STARTUPINFO"):
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
