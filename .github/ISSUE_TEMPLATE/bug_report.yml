@@ -1,0 +1,68 @@
+name: "🐛 Relato de Bug"
+description: "Crie um relatório detalhado para nos ajudar a identificar e corrigir um problema."
+title: "[BUG]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por relatar um problema! Por favor, forneça o máximo de detalhes possível para podermos reproduzi-lo com precisão.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Descrição do Problema
+      description: Uma explicação clara e concisa sobre qual é o erro.
+      placeholder: Ao processar vídeos .MOV verticais no Windows 11...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Sistema Operacional
+      description: Em qual sistema operacional você encontrou o problema?
+      options:
+        - Windows 11
+        - Windows 10
+        - Ubuntu / Linux (AppImage)
+        - Linux (Flatpak)
+        - macOS (Apple Silicon M1/M2/M3)
+        - macOS (Intel)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: format
+    attributes:
+      label: Formato do Aplicativo
+      description: Como você executou o aplicativo?
+      options:
+        - Executável Portátil (.exe)
+        - Instalador Windows (Setup.exe)
+        - AppImage (Linux)
+        - Flatpak (Linux)
+        - Pacote .dmg (macOS)
+        - Código fonte Python (main.py)
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Passos para Reproduzir
+      description: Liste os passos necessários para reproduzir o comportamento.
+      placeholder: |
+        1. Abra o aplicativo
+        2. Selecione uma pasta contendo arquivos HEIC
+        3. Clique em Iniciar Pipeline
+        4. O erro ocorre no arquivo IMG_001.HEIC
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs e Mensagens de Erro
+      description: Cole aqui as mensagens do console ou o arquivo de log relevante.
+      render: shell

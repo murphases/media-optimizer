@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Media Optimizer
+Comment=Otimizador Profissional de Fotos e Vídeos
+Exec=media-optimizer
+Icon=media-optimizer
+Terminal=false
+Type=Application
+Categories=Graphics;AudioVideo;Photography;
+Keywords=photos;videos;optimizer;converter;heic;raw;takeout;
+StartupWMClass=MediaOptimizer

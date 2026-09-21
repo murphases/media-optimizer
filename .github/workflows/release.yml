@@ -1,0 +1,135 @@
+name: Automated Multiplatform Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows (.exe & Installer)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Baixar binários estáticos FFmpeg
+        run: python scripts/bundle_ffmpeg.py windows
+
+      - name: Compilar Executável com PyInstaller
+        run: pyinstaller packaging/windows/media_optimizer.spec
+
+      - name: Compactar versão portátil (ZIP)
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/MediaOptimizer.exe -DestinationPath dist/MediaOptimizer-Windows-Portable.zip
+
+      - name: Upload de artefato Windows
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-binaries
+          path: |
+            dist/MediaOptimizer.exe
+            dist/MediaOptimizer-Windows-Portable.zip
+
+  build-linux:
+    name: Build Linux (AppImage)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependências do sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2 wget
+          wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+          sudo mv appimagetool /usr/local/bin/
+
+      - name: Instalar dependências Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Construir AppImage
+        run: bash packaging/linux/build_appimage.sh
+
+      - name: Upload de artefato Linux
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-binaries
+          path: dist/MediaOptimizer-x86_64.AppImage
+        continue-on-error: true
+
+  build-macos:
+    name: Build macOS (.dmg)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Construir .dmg
+        run: bash packaging/macos/build_dmg.sh
+
+      - name: Upload de artefato macOS
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-binaries
+          path: dist/MediaOptimizer-macOS.dmg
+        continue-on-error: true
+
+  create-release:
+    name: Publicar GitHub Release
+    needs: [build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Baixar todos os artefatos
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-release/
+
+      - name: Organizar arquivos para a Release
+        run: |
+          mkdir -p release-assets/
+          find dist-release/ -type f \( -name "*.exe" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.dmg" \) -exec cp {} release-assets/ \;
+          ls -la release-assets/
+
+      - name: Criar GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false

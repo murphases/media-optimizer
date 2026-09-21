@@ -1,0 +1,33 @@
+name: "💡 Sugestão de Funcionalidade"
+description: "Proponha uma nova funcionalidade, melhoria ou ideia para o Media Optimizer."
+title: "[FEATURE]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Agradecemos sua ideia para evoluir o Media Optimizer!
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Qual problema essa funcionalidade resolve?
+      description: Uma descrição clara do problema ou necessidade que você tem.
+      placeholder: Atualmente é necessário selecionar a pasta manualmente toda vez...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Descrição da Solução Proposta
+      description: Como você imagina que essa funcionalidade deveria se comportar?
+      placeholder: Adicionar uma lista de diretórios favoritos ou histórico de pastas recentes.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas Consideradas
+      description: Você considerou alguma abordagem alternativa?

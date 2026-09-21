@@ -1,0 +1,33 @@
+app-id: org.mediaoptimizer.MediaOptimizer
+runtime: org.freedesktop.Platform
+runtime-version: '23.08'
+sdk: org.freedesktop.Sdk
+command: media-optimizer
+
+finish-args:
+  - --share=ipc
+  - --socket=x11
+  - --socket=wayland
+  - --filesystem=host
+  - --device=all
+
+modules:
+  - name: ffmpeg
+    buildsystem: autotools
+    config-opts:
+      - --enable-gpl
+      - --enable-nonfree
+      - --disable-debug
+    sources:
+      - type: archive
+        url: https://ffmpeg.org/releases/ffmpeg-6.1.1.tar.xz
+        sha256: 8684f4b00f94b167ffde8e37871c507a12e7e9612e8173ea82f2baacae4e1860
+
+  - name: media-optimizer
+    buildsystem: simple
+    build-commands:
+      - pip3 install --no-index --find-links="file://${PWD}" --prefix=${FLATPAK_DEST} .
+      - install -D -m 644 packaging/linux/media-optimizer.desktop ${FLATPAK_DEST}/share/applications/org.mediaoptimizer.MediaOptimizer.desktop
+    sources:
+      - type: dir
+        path: ../../
