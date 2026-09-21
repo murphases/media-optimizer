@@ -26,11 +26,13 @@
 
 - 🛡️ **Segurança Absoluta dos Arquivos Originais:** A pasta de origem é estritamente **somente leitura**. Nenhum arquivo original é modificado, movido ou apagado.
 - 📦 **Zero Dependências para o Usuário Final:** O aplicativo já vem acompanhado de binários estáticos do **FFmpeg** e **FFprobe**. O usuário final não precisa instalar nada manualmente.
-- ⚡ **Aceleração por Hardware Dinâmica:** Detecta e aproveita automaticamente aceleradores de GPU:
-  - **NVIDIA NVENC** (Windows/Linux)
-  - **Apple Silicon VideoToolbox** (macOS M1/M2/M3/M4)
-  - **Intel QuickSync (QSV)** / **AMD (AMF/VAAPI)**
-  - Fallback transparente e estável para **CPU x264/x265**.
+- ⚡ **Aceleração Universal por Hardware & CPU Fallback:**
+  - **Processadores (CPU):** Suporte total a arquiteturas **x86**, **x64** (Intel Core, Xeon, AMD Ryzen, Threadripper, EPYC) e **ARM64** (Apple Silicon M-Series, Snapdragon X Elite) com multithreading dinâmico balanceado.
+  - **NVIDIA:** Séries **RTX** e **GTX** via `h264_nvenc`, com suporte inteligente à série **GT** (detecção de placas sem bloco NVENC em silício e fallback automático e transparente para CPU sem travar a fila).
+  - **AMD:** Séries **Radeon** e **RX** via `h264_amf` (Windows) e `h264_vaapi` (Linux).
+  - **Intel:** Linha dedicada **Intel Arc** (A380, A580, A750, A770, B580) e integradas **Iris Xe / UHD Graphics** via `h264_qsv` (Quick Sync Video).
+  - **Apple Silicon:** M1, M2, M3, M4 (Pro/Max/Ultra) via `h264_videotoolbox`.
+  - **Fallback Universal:** Codificação multithread ultraestável via `libx264` caso nenhuma GPU compatível esteja presente.
 - 🎛️ **Painel de Telemetria de Hardware (Anti-Crash & Auto-Throttling):** Monitora uso de CPU, memória RAM, temperatura e VRAM da GPU em tempo real. Se o consumo de memória ultrapassar o limite seguro (padrão: 88%), o motor desacelera o despacho para prevenir travamentos (*Out Of Memory*).
 - 📷 **Conversão Ampla de Formatos de Imagem:** Converte HEIC, HEIF, Sony RAW (.ARW), Canon (.CR2), Nikon (.NEF), DNG, AVIF, WEBP, PNG, BMP, TIFF para JPG/WebP com preservação total de metadados EXIF e orientação.
 - 🪄 **Redimensionamento Inteligente (LANCZOS):** Limita o lado maior para 1350px (fotos) e 1920px (vídeos), sem efetuar *upscale* em fotos ou vídeos menores.

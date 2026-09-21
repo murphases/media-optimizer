@@ -80,3 +80,17 @@ Para evitar que processamentos em lote com centenas de arquivos HEIC de 48MP sat
   $$\text{target\_fps} = \begin{cases} 30, & \text{se } \text{fps\_orig} > 30 \\ \text{fps\_orig}, & \text{se } \text{fps\_orig} \le 30 \end{cases}$$
 - **Otimização de Streaming:** Aplicação do parâmetro `-movflags +faststart` para mover o átomo `moov` para o início do arquivo de vídeo, viabilizando reprodução imediata na web sem carregar todo o arquivo.
 - **Escrita Atômica:** Nenhum arquivo final é gravado diretamente no destino. O arquivo é gerado como `.tmp.mov` e renomeado somente se o FFmpeg retornar exit code 0.
+
+### 3. Matriz de Aceleração por Hardware & Fallback
+O pipeline de codificação de vídeo utiliza probing ativo e dinâmico de encoders com teste em hardware (`nullsrc -> encoder -> null`):
+
+| Família / Fabricante | Plataforma | Encoder Prioritário | Estratégia de Fallback |
+| :--- | :--- | :--- | :--- |
+| **NVIDIA RTX / GTX** | Windows / Linux | `h264_nvenc` | `libx264` (CPU) em caso de erro de driver |
+| **NVIDIA GT (ex: GT 1030, GT 710)** | Windows / Linux | `libx264` | Probing ativo detecta ausência de chip NVENC e usa CPU imediatamente |
+| **AMD Radeon RX / Vega / Pro** | Windows | `h264_amf` | `libx264` (CPU) se AMF indisponível |
+| **AMD Radeon RX / Vega / Pro** | Linux | `h264_vaapi` | `libx264` (CPU) se VAAPI indisponível |
+| **Intel Arc / Iris Xe / UHD** | Windows / Linux | `h264_qsv` | `libx264` (CPU) se QSV indisponível |
+| **Apple Silicon (M1/M2/M3/M4)** | macOS | `h264_videotoolbox` | `libx264` (CPU) |
+| **Qualquer CPU (x86, x64, Intel, AMD, ARM)** | Todas | `libx264` | Multithreading nativo escalonado por núcleos lógicos |
+

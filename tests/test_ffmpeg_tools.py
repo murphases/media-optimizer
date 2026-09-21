@@ -335,3 +335,93 @@ def test_detect_best_video_encoder_all_exceptions(tmp_path):
         assert enc == "libx264"
 
 
+def test_build_video_conversion_command_all_encoders(tmp_path):
+    ffmpeg = tmp_path / "ffmpeg.exe"
+    src = tmp_path / "in.mp4"
+    dst = tmp_path / "out.mov"
+
+    # AMF (AMD)
+    cmd_amf = build_video_conversion_command(
+        ffmpeg_exe=ffmpeg,
+        input_path=src,
+        output_path=dst,
+        encoder="h264_amf",
+        target_w=1920,
+        target_h=1080,
+    )
+    assert "-c:v" in cmd_amf and "h264_amf" in cmd_amf
+    assert "-quality" in cmd_amf and "balanced" in cmd_amf
+
+    # QSV (Intel)
+    cmd_qsv = build_video_conversion_command(
+        ffmpeg_exe=ffmpeg,
+        input_path=src,
+        output_path=dst,
+        encoder="h264_qsv",
+        target_w=1920,
+        target_h=1080,
+    )
+    assert "-c:v" in cmd_qsv and "h264_qsv" in cmd_qsv
+    assert "-global_quality" in cmd_qsv
+
+    # VAAPI (Linux)
+    cmd_vaapi = build_video_conversion_command(
+        ffmpeg_exe=ffmpeg,
+        input_path=src,
+        output_path=dst,
+        encoder="h264_vaapi",
+        target_w=1920,
+        target_h=1080,
+    )
+    assert "-c:v" in cmd_vaapi and "h264_vaapi" in cmd_vaapi
+    assert "-qp" in cmd_vaapi
+
+    # Threads
+    cmd_threads = build_video_conversion_command(
+        ffmpeg_exe=ffmpeg,
+        input_path=src,
+        output_path=dst,
+        encoder="libx264",
+        target_w=1920,
+        target_h=1080,
+        threads=6,
+    )
+    assert "-threads" in cmd_threads
+    assert "6" in cmd_threads
+
+
+def test_detect_best_video_encoder_qsv_and_amf(tmp_path, monkeypatch):
+    fake_ffmpeg = tmp_path / "ffmpeg.exe"
+    fake_ffmpeg.touch()
+    monkeypatch.setattr(sys, "platform", "win32")
+
+    # When nvenc fails but qsv succeeds
+    def mock_run_qsv(cmd, *args, **kwargs):
+        if "h264_qsv" in cmd:
+            return subprocess.CompletedProcess(args=cmd, returncode=0)
+        return subprocess.CompletedProcess(args=cmd, returncode=1)
+
+    with patch("subprocess.run", side_effect=mock_run_qsv):
+        assert detect_best_video_encoder(fake_ffmpeg) == "h264_qsv"
+
+    # When nvenc and qsv fail but amf succeeds
+    def mock_run_amf(cmd, *args, **kwargs):
+        if "h264_amf" in cmd:
+            return subprocess.CompletedProcess(args=cmd, returncode=0)
+        return subprocess.CompletedProcess(args=cmd, returncode=1)
+
+    with patch("subprocess.run", side_effect=mock_run_amf):
+        assert detect_best_video_encoder(fake_ffmpeg) == "h264_amf"
+
+    # Linux: when nvenc and qsv fail but vaapi succeeds
+    monkeypatch.setattr(sys, "platform", "linux")
+    def mock_run_vaapi(cmd, *args, **kwargs):
+        if "h264_vaapi" in cmd:
+            return subprocess.CompletedProcess(args=cmd, returncode=0)
+        return subprocess.CompletedProcess(args=cmd, returncode=1)
+
+    with patch("subprocess.run", side_effect=mock_run_vaapi):
+        assert detect_best_video_encoder(fake_ffmpeg) == "h264_vaapi"
+
+
+

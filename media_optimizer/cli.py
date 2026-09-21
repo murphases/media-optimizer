@@ -14,6 +14,13 @@ from media_optimizer.config import ConfigManager, OptimizerSettings
 from media_optimizer.hardware import HardwareMonitor, format_bytes, format_time
 from media_optimizer.pipeline import PipelineOrchestrator
 
+if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 
 def build_parser() -> argparse.ArgumentParser:
     """Builds the CLI argument parser."""
@@ -68,15 +75,16 @@ def print_telemetry() -> None:
     print("=" * 60)
     print(" 🛠️ TELEMETRIA DE HARDWARE DO SISTEMA")
     print("=" * 60)
-    print(f" CPU:         {telemetry.cpu_name} ({telemetry.cpu_count} núcleos/threads)")
+    print(f" CPU:         {telemetry.cpu_vendor} ({telemetry.cpu_name}) [{telemetry.cpu_arch}] - {telemetry.cpu_count} núcleos/threads")
     print(f" Carga CPU:   {telemetry.cpu_percent:.1f}%")
     print(f" Memória RAM: {format_bytes(telemetry.ram_used_bytes)} / {format_bytes(telemetry.ram_total_bytes)} ({telemetry.ram_percent:.1f}%)")
     if telemetry.gpu_available:
-        print(f" GPU:         {telemetry.gpu_name}")
+        print(f" GPU:         {telemetry.gpu_name} ({telemetry.gpu_vendor} {telemetry.gpu_series})")
+        print(f" Encoder:     Acelerador de hardware detectado: {telemetry.recommended_encoder}")
         print(f" VRAM:        {format_bytes(telemetry.gpu_mem_used_bytes)} / {format_bytes(telemetry.gpu_mem_total_bytes)}")
         print(f" Temp GPU:    {telemetry.gpu_temp_c:.1f}°C")
     else:
-        print(" GPU:         Nenhuma GPU dedicada detectada (Codificação via CPU).")
+        print(" GPU:         Nenhuma GPU dedicada detectada (Codificação via CPU libx264).")
     print("=" * 60)
 
 
