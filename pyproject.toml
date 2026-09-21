@@ -15,7 +15,6 @@ authors = [
 keywords = ["photos", "videos", "optimizer", "converter", "heic", "raw", "google-photos", "takeout"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: Other/Proprietary License",
     "Operating System :: OS Independent",
     "Environment :: Win32 (MS Windows)",
     "Environment :: X11 Applications",
@@ -44,6 +43,11 @@ dev = [
 
 [project.scripts]
 media-optimizer = "main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["media_optimizer*"]
+exclude = ["packaging*", "tests*", "scripts*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
