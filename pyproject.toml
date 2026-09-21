@@ -74,4 +74,6 @@ exclude_lines = [
     "^\\s*except ImportError:.*$",
     "^\\s*except Exception:.*$",
     "^\\s*pass\\s*$",
+    "^\\s*if sys\\.platform ==.*$",
+    "^\\s*elif sys\\.platform.*$",
 ]

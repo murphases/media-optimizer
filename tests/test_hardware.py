@@ -132,11 +132,13 @@ def test_adjust_process_priority(monkeypatch):
     with patch("psutil.Process", return_value=mock_proc):
         # Windows branch
         monkeypatch.setattr(sys, "platform", "win32")
+        monkeypatch.setattr("psutil.BELOW_NORMAL_PRIORITY_CLASS", 16384, raising=False)
         HardwareMonitor.adjust_process_priority(1234)
-        mock_proc.nice.assert_called()
+        mock_proc.nice.assert_called_with(16384)
 
         # Unix branch
         monkeypatch.setattr(sys, "platform", "linux")
+        mock_proc.nice.reset_mock()
         mock_proc.nice.return_value = 0
         HardwareMonitor.adjust_process_priority(1234)
         mock_proc.nice.assert_called_with(10)

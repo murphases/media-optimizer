@@ -33,6 +33,22 @@ def test_print_telemetry_no_gpu(capsys, monkeypatch):
     assert "Nenhuma GPU dedicada detectada" in captured.out
 
 
+def test_print_telemetry_with_gpu(capsys, monkeypatch):
+    from media_optimizer.hardware import SystemTelemetry
+    mock_mon = MagicMock()
+    mock_mon.get_telemetry.return_value = SystemTelemetry(
+        gpu_available=True,
+        gpu_name="Mock GPU 8GB",
+        gpu_mem_used_bytes=1024**3,
+        gpu_mem_total_bytes=8 * 1024**3,
+        gpu_temp_c=50.0,
+    )
+    monkeypatch.setattr("media_optimizer.cli.HardwareMonitor", lambda: mock_mon)
+    print_telemetry()
+    captured = capsys.readouterr()
+    assert "Mock GPU 8GB" in captured.out
+
+
 def test_cli_telemetry_flag():
     with patch("media_optimizer.cli.print_telemetry") as mock_tel:
         assert main(["--telemetry"]) == 0

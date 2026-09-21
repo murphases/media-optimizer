@@ -206,7 +206,7 @@ class HardwareMonitor:
         try:
             target_pid = pid or os.getpid()
             proc = psutil.Process(target_pid)
-            if sys.platform == "win32":
+            if sys.platform == "win32" and hasattr(psutil, "BELOW_NORMAL_PRIORITY_CLASS"):
                 proc.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
             else:
                 current_nice = proc.nice()
