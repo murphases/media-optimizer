@@ -151,7 +151,7 @@ class VideoOptimizer:
             )
 
             startupinfo = None
-            if sys.platform == "win32":
+            if sys.platform == "win32" and hasattr(subprocess, "STARTUPINFO"):
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
@@ -189,6 +189,8 @@ class VideoOptimizer:
                 )
                 HardwareMonitor.adjust_process_priority(proc.pid)
                 _, stderr = proc.communicate()
+                if proc.returncode == 0:
+                    self.active_encoder = "libx264"
 
             if proc.returncode != 0:
                 err_msg = stderr.decode("utf-8", errors="replace").strip()

@@ -45,7 +45,7 @@ Nossa missão é fornecer uma **ferramenta desktop moderna, acessível, segura e
 | **Instalação** | Zero dependências (FFmpeg e bibliotecas inclusas) | Requer instalar Python, FFmpeg e dependências no terminal |
 | **Segurança** | Originais 100% intocados e escrita atômica (`.tmp`) | Risco de sobrescrever fotos originais |
 | **Estabilidade** | Telemetria ativa com Auto-Throttling anti-crash | Congela o computador por saturação de RAM |
-| **Aceleração** | NVENC, VideoToolbox e QuickSync automáticos | Frequentemente apenas CPU lenta |
+| **Aceleração** | Suporte universal: NVIDIA RTX/GTX/GT, AMD Radeon/RX, Intel Arc/Iris, Apple Silicon e CPU x86/x64/ARM | Frequentemente apenas CPU lenta |
 | **Custos** | Código aberto, sem anúncios ou assinaturas | Pago ou com limitações de recursos |
 
 ---
@@ -54,7 +54,7 @@ Nossa missão é fornecer uma **ferramenta desktop moderna, acessível, segura e
 
 ### Fase 1 (Versão Atual - v1.0.0)
 - [x] Motor desacoplado com suporte a imagens HEIC, RAW, AVIF, PNG, JPG.
-- [x] Otimização inteligente de vídeos com capping de FPS e NVENC/VideoToolbox/CPU.
+- [x] Otimização inteligente de vídeos com capping de FPS e aceleração universal (NVIDIA NVENC, AMD AMF/VAAPI, Intel QSV, Apple VideoToolbox e CPU libx264).
 - [x] Interface gráfica moderna CustomTkinter com temas Claro/Escuro/Sistema.
 - [x] Telemetria dinâmica e controle de prioridade no sistema operacional.
 - [x] Empacotamento multiplataforma (.exe, AppImage, Flatpak, .dmg).

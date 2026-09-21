@@ -113,7 +113,7 @@ def probe_video(video_path: Path, ffprobe_exe: Optional[Path] = None) -> Optiona
 
     try:
         startupinfo = None
-        if sys.platform == "win32":
+        if sys.platform == "win32" and hasattr(subprocess, "STARTUPINFO"):
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
@@ -161,21 +161,25 @@ def probe_video(video_path: Path, ffprobe_exe: Optional[Path] = None) -> Optiona
 
 
 def detect_best_video_encoder(ffmpeg_exe: Optional[Path] = None) -> str:
-    """Tests and returns the fastest supported video hardware encoder, falling back to libx264."""
+    """
+    Tests and returns the fastest supported video hardware encoder,
+    falling back to libx264.
+    Supports NVIDIA (NVENC), Intel Arc/Iris/UHD (QSV), AMD Radeon/RX (AMF/VAAPI),
+    Apple Silicon (VideoToolbox), and CPU (libx264).
+    """
     ffmpeg = ffmpeg_exe or FFmpegResolver.get_ffmpeg()
     if not ffmpeg:
         return "libx264"
 
-    encoders_to_test = []
     if sys.platform == "win32":
         encoders_to_test = ["h264_nvenc", "h264_qsv", "h264_amf", "libx264"]
     elif sys.platform == "darwin":
         encoders_to_test = ["h264_videotoolbox", "libx264"]
     else:
-        encoders_to_test = ["h264_nvenc", "h264_vaapi", "libx264"]
+        encoders_to_test = ["h264_nvenc", "h264_qsv", "h264_vaapi", "libx264"]
 
     startupinfo = None
-    if sys.platform == "win32":
+    if sys.platform == "win32" and hasattr(subprocess, "STARTUPINFO"):
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
@@ -240,8 +244,9 @@ def build_video_conversion_command(
     target_fps: Optional[float] = None,
     crf: int = 23,
     audio_bitrate: str = "128k",
+    threads: Optional[int] = None,
 ) -> List[str]:
-    """Constructs robust FFmpeg command for video compression."""
+    """Constructs robust FFmpeg command for video compression across all GPU/CPU encoders."""
     cmd = [
         str(ffmpeg_exe),
         "-y",
@@ -261,10 +266,19 @@ def build_video_conversion_command(
     cmd.extend(["-c:v", encoder])
     if encoder == "h264_nvenc":
         cmd.extend(["-preset", "p6", "-cq", str(crf), "-rc", "vbr", "-pix_fmt", "yuv420p"])
+    elif encoder == "h264_amf":
+        cmd.extend(["-rc", "cqp", "-qp_i", str(crf), "-qp_p", str(crf), "-quality", "balanced", "-pix_fmt", "yuv420p"])
+    elif encoder == "h264_qsv":
+        cmd.extend(["-global_quality", str(crf), "-preset", "medium", "-pix_fmt", "yuv420p"])
+    elif encoder == "h264_vaapi":
+        cmd.extend(["-qp", str(crf)])
     elif encoder == "h264_videotoolbox":
         cmd.extend(["-q:v", str(crf), "-pix_fmt", "yuv420p"])
-    else:  # libx264
+    else:  # libx264 (CPU)
         cmd.extend(["-crf", str(crf), "-preset", "medium", "-pix_fmt", "yuv420p"])
+
+    if threads is not None and threads > 0:
+        cmd.extend(["-threads", str(threads)])
 
     # Audio codec
     cmd.extend(["-c:a", "aac", "-b:a", audio_bitrate])

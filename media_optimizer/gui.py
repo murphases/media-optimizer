@@ -459,17 +459,17 @@ class MediaOptimizerApp:
 
     def _start_telemetry_loop(self) -> None:
         def update():
-            telemetry = self.hw_monitor.get_telemetry()
-            self.lbl_cpu.configure(text=f"CPU: {telemetry.cpu_percent:.1f}% ({telemetry.cpu_count}T)")
+            cpu_label = f"CPU: {telemetry.cpu_vendor} [{telemetry.cpu_arch}] {telemetry.cpu_percent:.0f}% ({telemetry.cpu_count}T)"
+            self.lbl_cpu.configure(text=cpu_label)
             self.lbl_ram.configure(
                 text=f"RAM: {format_bytes(telemetry.ram_used_bytes)} / {format_bytes(telemetry.ram_total_bytes)} ({telemetry.ram_percent:.0f}%)"
             )
             if telemetry.gpu_available:
                 self.lbl_gpu.configure(
-                    text=f"GPU: {telemetry.gpu_load_percent:.0f}% | {telemetry.gpu_temp_c:.0f}°C | {format_bytes(telemetry.gpu_mem_used_bytes)}"
+                    text=f"GPU: {telemetry.gpu_series} ({telemetry.recommended_encoder}) | {telemetry.gpu_load_percent:.0f}%"
                 )
             else:
-                self.lbl_gpu.configure(text="GPU: N/A (CPU)")
+                self.lbl_gpu.configure(text="GPU: N/A (CPU libx264)")
 
             if telemetry.is_throttling:
                 self.lbl_throttle.configure(text="⚠️ Throttling Ativo!", text_color="#e74c3c")
