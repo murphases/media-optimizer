@@ -247,6 +247,11 @@ def test_ffmpeg_resolver_additional_paths(monkeypatch, tmp_path: Path):
     assert FFmpegResolver.get_ffprobe() is not None or FFmpegResolver.get_ffprobe() is None
 
 
+def test_ffmpeg_resolver_returns_none_when_not_found(monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    assert FFmpegResolver.get_binary_path("completely_unknown_binary_xyz_123") is None
+
+
 def test_probe_video_fps_parse_error(tmp_path: Path):
     fake_probe = tmp_path / "ffprobe.exe"
     fake_probe.touch()

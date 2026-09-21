@@ -20,11 +20,11 @@ except ImportError:
 
 # Optional NVIDIA NVML
 HAS_NVML = False
-try:
+try:  # pragma: no cover
     import pynvml
     pynvml.nvmlInit()
     HAS_NVML = True
-except Exception:
+except Exception:  # pragma: no cover
     HAS_NVML = False
 
 
