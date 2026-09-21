@@ -235,11 +235,12 @@ def test_ffmpeg_resolver_additional_paths(monkeypatch, tmp_path: Path):
     local_bin_target.touch()
     assert FFmpegResolver.get_binary_path("testbin2") == local_bin_target
 
-    # 4. imageio_ffmpeg mock
+    # 4. imageio_ffmpeg mock (ensure which returns None so it reaches step 4)
     mock_imageio = MagicMock()
     mock_imageio.get_ffmpeg_exe.return_value = str(local_target)
-    with patch.dict(sys.modules, {"imageio_ffmpeg": mock_imageio}):
-        assert FFmpegResolver.get_binary_path("ffmpeg") is not None
+    with patch("shutil.which", return_value=None), \
+         patch.dict(sys.modules, {"imageio_ffmpeg": mock_imageio}):
+        assert FFmpegResolver.get_binary_path("ffmpeg") == local_target
 
     # 5. Helper methods
     assert FFmpegResolver.get_ffmpeg() is not None or FFmpegResolver.get_ffmpeg() is None
@@ -275,7 +276,8 @@ def test_detect_best_video_encoder_platforms(monkeypatch, tmp_path: Path):
     fake_ffmpeg.touch()
 
     # None returns libx264
-    assert detect_best_video_encoder(None) == "libx264"
+    with patch.object(FFmpegResolver, "get_ffmpeg", return_value=None):
+        assert detect_best_video_encoder(None) == "libx264"
 
     # Darwin platform
     monkeypatch.setattr(sys, "platform", "darwin")
