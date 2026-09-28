@@ -132,3 +132,24 @@ def test_pipeline_individual_stages_with_progress(temp_workspace, tmp_path):
     res3 = orchestrator.run_stage_3(progress_cb=cb)
     assert res3.total_files == 1
 
+
+def test_pipeline_individual_stages_custom_dirs(temp_workspace, tmp_path):
+    settings = OptimizerSettings(dry_run=True)
+    orchestrator = PipelineOrchestrator(settings=settings)
+
+    custom_in = temp_workspace["input_dir"]
+    custom_conv = tmp_path / "custom_conv"
+    custom_opt_img = tmp_path / "custom_opt_img"
+    custom_opt_vid = tmp_path / "custom_opt_vid"
+
+    res1 = orchestrator.run_stage_1(input_dir=custom_in, output_dir=custom_conv)
+    assert res1.total_files == 3
+
+    custom_conv.mkdir(parents=True, exist_ok=True)
+    (custom_conv / "test.jpg").touch()
+    res2 = orchestrator.run_stage_2(input_dir=custom_conv, output_dir=custom_opt_img)
+    assert res2.total_files == 1
+
+    res3 = orchestrator.run_stage_3(input_dir=custom_in, output_dir=custom_opt_vid)
+    assert res3.total_files == 1
+

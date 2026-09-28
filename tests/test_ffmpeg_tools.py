@@ -5,6 +5,9 @@ Tests for media_optimizer.ffmpeg_tools module.
 import json
 import subprocess
 import sys
+import tarfile
+import urllib.request
+import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 import pytest
@@ -24,6 +27,47 @@ def test_video_metadata_defaults():
     assert meta.width == 0
     assert meta.height == 0
     assert meta.fps == 0.0
+    assert meta.display_width == 0
+    assert meta.display_height == 0
+    assert not meta.is_vertical
+
+
+def test_video_metadata_display_dimensions_and_orientation():
+    # Horizontal normal
+    m1 = VideoMetadata(width=1920, height=1080, rotation=0)
+    assert m1.display_width == 1920
+    assert m1.display_height == 1080
+    assert not m1.is_vertical
+
+    # Native vertical (e.g. TikTok / Reels)
+    m2 = VideoMetadata(width=1080, height=1920, rotation=0)
+    assert m2.display_width == 1080
+    assert m2.display_height == 1920
+    assert m2.is_vertical
+
+    # Rotated 90 degrees (smartphone vertical video stored in landscape)
+    m3 = VideoMetadata(width=1920, height=1080, rotation=90)
+    assert m3.display_width == 1080
+    assert m3.display_height == 1920
+    assert m3.is_vertical
+
+    # Rotated -90 degrees
+    m4 = VideoMetadata(width=1920, height=1080, rotation=-90)
+    assert m4.display_width == 1080
+    assert m4.display_height == 1920
+    assert m4.is_vertical
+
+    # Rotated 270 degrees
+    m5 = VideoMetadata(width=1920, height=1080, rotation=270)
+    assert m5.display_width == 1080
+    assert m5.display_height == 1920
+    assert m5.is_vertical
+
+    # Rotated 180 degrees (upside down landscape)
+    m6 = VideoMetadata(width=1920, height=1080, rotation=180)
+    assert m6.display_width == 1920
+    assert m6.display_height == 1080
+    assert not m6.is_vertical
 
 
 def test_ffmpeg_resolver_pyinstaller(monkeypatch, tmp_path: Path):
@@ -124,6 +168,95 @@ def test_probe_video_success(tmp_path: Path):
         assert meta.rotation == 90
 
 
+def test_probe_video_rotation_variations(tmp_path: Path):
+    fake_probe = tmp_path / "ffprobe.exe"
+    fake_probe.touch()
+    video_path = tmp_path / "test.mov"
+    video_path.touch()
+
+    # 1. side_data_list with valid float rotation
+    data_side_data = {
+        "format": {},
+        "streams": [
+            {
+                "codec_type": "video",
+                "width": 1920,
+                "height": 1080,
+                "side_data_list": [{"rotation": -90.0}],
+            }
+        ],
+    }
+    with patch("subprocess.run", return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=json.dumps(data_side_data))):
+        meta = probe_video(video_path, fake_probe)
+        assert meta.rotation == -90
+        assert meta.is_vertical
+
+    # 2. side_data_list with invalid rotation falling back to tags
+    data_fallback = {
+        "format": {},
+        "streams": [
+            {
+                "codec_type": "video",
+                "width": 1920,
+                "height": 1080,
+                "side_data_list": [{"rotation": "not_a_number"}],
+                "tags": {"ROTATION": "90"},
+            }
+        ],
+    }
+    with patch("subprocess.run", return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=json.dumps(data_fallback))):
+        meta = probe_video(video_path, fake_probe)
+        assert meta.rotation == 90
+        assert meta.is_vertical
+
+    # 3. tags with invalid rotation string
+    data_invalid_tag = {
+        "format": {},
+        "streams": [
+            {
+                "codec_type": "video",
+                "width": 1920,
+                "height": 1080,
+                "tags": {"rotate": "invalid_rot"},
+            }
+        ],
+    }
+    with patch("subprocess.run", return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=json.dumps(data_invalid_tag))):
+        meta = probe_video(video_path, fake_probe)
+        assert meta.rotation == 0
+
+    # 4. format tags rotation fallback
+    data_format_tag = {
+        "format": {"tags": {"ROTATE": "270"}},
+        "streams": [
+            {
+                "codec_type": "video",
+                "width": 1920,
+                "height": 1080,
+            }
+        ],
+    }
+    with patch("subprocess.run", return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=json.dumps(data_format_tag))):
+        meta = probe_video(video_path, fake_probe)
+        assert meta.rotation == 270
+        assert meta.is_vertical
+
+    # 5. format tags with invalid rotation string
+    data_format_invalid = {
+        "format": {"tags": {"rotate": "bad_rot"}},
+        "streams": [
+            {
+                "codec_type": "video",
+                "width": 1920,
+                "height": 1080,
+            }
+        ],
+    }
+    with patch("subprocess.run", return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=json.dumps(data_format_invalid))):
+        meta = probe_video(video_path, fake_probe)
+        assert meta.rotation == 0
+
+
 def test_probe_video_missing_or_error(tmp_path: Path):
     assert probe_video(tmp_path / "non_existent.mp4", tmp_path / "probe") is None
 
@@ -176,6 +309,7 @@ def test_build_video_conversion_command(tmp_path: Path):
     )
     assert "-c:v" in cmd_nvenc
     assert "h264_nvenc" in cmd_nvenc
+    assert "setsar=1" in cmd_nvenc[cmd_nvenc.index("-vf") + 1]
     assert "fps=30.0" in cmd_nvenc[cmd_nvenc.index("-vf") + 1]
 
     # Test VideoToolbox
@@ -423,6 +557,166 @@ def test_detect_best_video_encoder_qsv_and_amf(tmp_path, monkeypatch):
 
     with patch("subprocess.run", side_effect=mock_run_vaapi):
         assert detect_best_video_encoder(fake_ffmpeg) == "h264_vaapi"
+
+
+def test_ffmpeg_resolver_user_cache(tmp_path, monkeypatch):
+    suffix = ".exe" if sys.platform == "win32" else ""
+    fake_cache_dir = tmp_path / ".media_optimizer" / "bin"
+    fake_cache_dir.mkdir(parents=True)
+    fake_bin = fake_cache_dir / f"cachebin{suffix}"
+    fake_bin.touch()
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    with patch("shutil.which", return_value=None):
+        found = FFmpegResolver.get_binary_path("cachebin")
+        assert found == fake_bin
+
+
+def test_ffmpeg_resolver_imageio_ffmpeg_fallback(tmp_path, monkeypatch):
+    fake_ffmpeg = tmp_path / "fake_imageio_ffmpeg.exe"
+    fake_ffmpeg.touch()
+
+    mock_mod = MagicMock()
+    mock_mod.get_ffmpeg_exe.return_value = str(fake_ffmpeg)
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    with patch.object(Path, "resolve", return_value=tmp_path / "mod" / "file.py"), \
+         patch("shutil.which", return_value=None), \
+         patch("importlib.import_module", return_value=mock_mod):
+        found = FFmpegResolver.get_binary_path("ffmpeg")
+        assert found == fake_ffmpeg
+
+
+def test_ffmpeg_resolver_imageio_ffmpeg_fallback_invalid(tmp_path, monkeypatch):
+    mock_mod = MagicMock()
+    mock_mod.get_ffmpeg_exe.return_value = str(tmp_path / "non_existent.exe")
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    with patch.object(Path, "resolve", return_value=tmp_path / "mod" / "file.py"), \
+         patch("shutil.which", return_value=None), \
+         patch("importlib.import_module", return_value=mock_mod):
+        found = FFmpegResolver.get_binary_path("ffmpeg")
+        assert found is None
+
+
+def test_ensure_binaries_already_exists(tmp_path):
+    fake_ffmpeg = tmp_path / "ffmpeg.exe"
+    fake_ffprobe = tmp_path / "ffprobe.exe"
+    fake_ffmpeg.touch()
+    fake_ffprobe.touch()
+
+    with patch.object(FFmpegResolver, "get_ffmpeg", return_value=fake_ffmpeg), \
+         patch.object(FFmpegResolver, "get_ffprobe", return_value=fake_ffprobe):
+        assert FFmpegResolver.ensure_binaries(tmp_path) is True
+
+
+def test_ensure_binaries_copy_from_path(tmp_path, monkeypatch):
+    sys_ffmpeg = tmp_path / "sys_ffmpeg.exe"
+    sys_ffprobe = tmp_path / "sys_ffprobe.exe"
+    sys_ffmpeg.touch()
+    sys_ffprobe.touch()
+
+    monkeypatch.setattr(
+        "shutil.which",
+        lambda name: str(sys_ffmpeg) if name == "ffmpeg" else (str(sys_ffprobe) if name == "ffprobe" else None)
+    )
+
+    dest_dir = tmp_path / "target_bin"
+    with patch.object(FFmpegResolver, "get_ffmpeg", return_value=None), \
+         patch.object(FFmpegResolver, "get_ffprobe", return_value=None):
+        assert FFmpegResolver.ensure_binaries(dest_dir) is True
+        suffix = ".exe" if sys.platform == "win32" else ""
+        assert (dest_dir / f"ffmpeg{suffix}").exists()
+        assert (dest_dir / f"ffprobe{suffix}").exists()
+
+
+def test_ensure_binaries_copy_exception_and_unsupported_os(tmp_path, monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda _: "/mock/tool")
+    dest_dir = tmp_path / "target_bin_exc"
+
+    with patch.object(FFmpegResolver, "get_ffmpeg", return_value=None), \
+         patch.object(FFmpegResolver, "get_ffprobe", return_value=None), \
+         patch("shutil.copy2", side_effect=OSError("Disk full")), \
+         patch("platform.system", return_value="UnknownOS"):
+        # Copy fails, URL for UnknownOS not found -> returns False
+        assert FFmpegResolver.ensure_binaries(dest_dir) is False
+
+
+def test_ensure_binaries_download_zip(tmp_path, monkeypatch):
+    dest_dir = tmp_path / "target_zip"
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(Path, "chmod", lambda self, mode: None)
+
+    mock_zip = MagicMock()
+    mock_zip.__enter__.return_value = mock_zip
+    mock_zip.namelist.return_value = ["bin/ffmpeg", "bin/ffprobe"]
+    mock_zip.read.return_value = b"fake_binary_payload"
+
+    with patch.object(FFmpegResolver, "get_ffmpeg", return_value=None), \
+         patch.object(FFmpegResolver, "get_ffprobe", return_value=None), \
+         patch("shutil.which", return_value=None), \
+         patch("platform.system", return_value="Darwin"), \
+         patch("urllib.request.urlretrieve") as mock_retrieve, \
+         patch("zipfile.ZipFile", return_value=mock_zip):
+        def fake_retrieve(url, path):
+            Path(path).touch()
+        mock_retrieve.side_effect = fake_retrieve
+
+        assert FFmpegResolver.ensure_binaries(dest_dir) is True
+        assert (dest_dir / "ffmpeg").exists()
+        assert (dest_dir / "ffprobe").exists()
+
+
+def test_ensure_binaries_download_tar(tmp_path, monkeypatch):
+    dest_dir = tmp_path / "target_tar"
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(Path, "chmod", lambda self, mode: None)
+
+    member1 = MagicMock()
+    member1.name = "ffmpeg"
+    member2 = MagicMock()
+    member2.name = "ffprobe"
+
+    mock_tar = MagicMock()
+    mock_tar.__enter__.return_value = mock_tar
+    mock_tar.getmembers.return_value = [member1, member2]
+
+    f_mock = MagicMock()
+    f_mock.read.return_value = b"fake_elf_binary"
+    mock_tar.extractfile.return_value = f_mock
+
+    with patch.object(FFmpegResolver, "get_ffmpeg", return_value=None), \
+         patch.object(FFmpegResolver, "get_ffprobe", return_value=None), \
+         patch("shutil.which", return_value=None), \
+         patch("platform.system", return_value="Linux"), \
+         patch("urllib.request.urlretrieve") as mock_retrieve, \
+         patch("tarfile.open", return_value=mock_tar):
+        def fake_retrieve(url, path):
+            Path(path).touch()
+        mock_retrieve.side_effect = fake_retrieve
+
+        assert FFmpegResolver.ensure_binaries(dest_dir) is True
+        assert (dest_dir / "ffmpeg").exists()
+        assert (dest_dir / "ffprobe").exists()
+
+
+def test_ensure_binaries_download_exception(tmp_path, monkeypatch):
+    dest_dir = tmp_path / "target_err"
+
+    with patch.object(FFmpegResolver, "get_ffmpeg", return_value=None), \
+         patch.object(FFmpegResolver, "get_ffprobe", return_value=None), \
+         patch("shutil.which", return_value=None), \
+         patch("platform.system", return_value="Windows"), \
+         patch("urllib.request.urlretrieve", side_effect=Exception("Network error")):
+        assert FFmpegResolver.ensure_binaries(dest_dir) is False
+
+
+def test_ensure_binaries_default_target_dir(monkeypatch):
+    with patch.object(FFmpegResolver, "get_ffmpeg", return_value=None), \
+         patch.object(FFmpegResolver, "get_ffprobe", return_value=None), \
+         patch("shutil.which", return_value=None), \
+         patch("platform.system", return_value="NonExistentOS"):
+        assert FFmpegResolver.ensure_binaries(None) is False
 
 
 

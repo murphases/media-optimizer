@@ -77,6 +77,99 @@ def test_optimize_video_success(temp_workspace, tmp_path):
         assert dest.read_bytes() == b"compressed_video_result"
 
 
+def test_optimize_video_vertical_orientation(temp_workspace, tmp_path):
+    fake_ffmpeg = tmp_path / "ffmpeg.exe"
+    fake_ffmpeg.touch()
+    optimizer = VideoOptimizer(ffmpeg_path=fake_ffmpeg, max_dim=1920)
+
+    mock_proc = MagicMock(pid=8888, returncode=0)
+    mock_proc.communicate.return_value = (b"", b"")
+
+    dest = tmp_path / "out_vertical.mov"
+    executed_cmds = []
+
+    def side_effect_popen(cmd, *args, **kwargs):
+        executed_cmds.append(cmd)
+        temp_file = Path(cmd[-1])
+        temp_file.write_bytes(b"compressed_vertical_ok")
+        return mock_proc
+
+    # Probed video is 1920x1080 with rotation=90 (portrait smartphone video)
+    with patch("subprocess.Popen", side_effect=side_effect_popen), \
+         patch("media_optimizer.video_optimizer.probe_video") as mock_probe:
+        mock_probe.return_value = VideoMetadata(width=1920, height=1080, rotation=90, fps=30.0)
+
+        orig_sz, new_sz = optimizer.optimize_single_video(temp_workspace["video"], dest)
+        assert dest.exists()
+        assert len(executed_cmds) == 1
+        vf_arg = executed_cmds[0][executed_cmds[0].index("-vf") + 1]
+        # Target dimensions must preserve vertical orientation (1080:1920, NOT 1920:1080)
+        assert "scale=1080:1920" in vf_arg
+        assert "setsar=1" in vf_arg
+        # Rotation tag must be explicitly reset to 0 to prevent double-rotation in players
+        assert "-metadata:s:v:0" in executed_cmds[0]
+        assert executed_cmds[0][executed_cmds[0].index("-metadata:s:v:0") + 1] == "rotate=0"
+
+
+def test_optimize_video_vertical_downscale_max_dim(temp_workspace, tmp_path):
+    fake_ffmpeg = tmp_path / "ffmpeg.exe"
+    fake_ffmpeg.touch()
+    # Limiting max_dim to 1000 must scale the major axis (height: 1920 -> 1000) and minor axis (width: 1080 -> 562)
+    optimizer = VideoOptimizer(ffmpeg_path=fake_ffmpeg, max_dim=1000)
+
+    mock_proc = MagicMock(pid=8889, returncode=0)
+    mock_proc.communicate.return_value = (b"", b"")
+
+    dest = tmp_path / "out_vertical_downscale.mov"
+    executed_cmds = []
+
+    def side_effect_popen(cmd, *args, **kwargs):
+        executed_cmds.append(cmd)
+        temp_file = Path(cmd[-1])
+        temp_file.write_bytes(b"compressed_vertical_downscale_ok")
+        return mock_proc
+
+    with patch("subprocess.Popen", side_effect=side_effect_popen), \
+         patch("media_optimizer.video_optimizer.probe_video") as mock_probe:
+        mock_probe.return_value = VideoMetadata(width=1920, height=1080, rotation=90, fps=30.0)
+
+        orig_sz, new_sz = optimizer.optimize_single_video(temp_workspace["video"], dest)
+        assert dest.exists()
+        assert len(executed_cmds) == 1
+        vf_arg = executed_cmds[0][executed_cmds[0].index("-vf") + 1]
+        # Major axis 1920 scaled to 1000, minor axis 1080 scaled to 562
+        assert "scale=562:1000" in vf_arg
+
+
+def test_optimize_video_native_vertical(temp_workspace, tmp_path):
+    fake_ffmpeg = tmp_path / "ffmpeg.exe"
+    fake_ffmpeg.touch()
+    optimizer = VideoOptimizer(ffmpeg_path=fake_ffmpeg, max_dim=1920)
+
+    mock_proc = MagicMock(pid=8890, returncode=0)
+    mock_proc.communicate.return_value = (b"", b"")
+
+    dest = tmp_path / "out_native_vertical.mov"
+    executed_cmds = []
+
+    def side_effect_popen(cmd, *args, **kwargs):
+        executed_cmds.append(cmd)
+        temp_file = Path(cmd[-1])
+        temp_file.write_bytes(b"compressed_native_vertical_ok")
+        return mock_proc
+
+    # Native vertical video (1080x1920, rotation=0)
+    with patch("subprocess.Popen", side_effect=side_effect_popen), \
+         patch("media_optimizer.video_optimizer.probe_video") as mock_probe:
+        mock_probe.return_value = VideoMetadata(width=1080, height=1920, rotation=0, fps=30.0)
+
+        orig_sz, new_sz = optimizer.optimize_single_video(temp_workspace["video"], dest)
+        assert dest.exists()
+        assert len(executed_cmds) == 1
+        vf_arg = executed_cmds[0][executed_cmds[0].index("-vf") + 1]
+        assert "scale=1080:1920" in vf_arg
+
+
 def test_optimize_video_nvenc_fallback_to_libx264(temp_workspace, tmp_path):
     fake_ffmpeg = tmp_path / "ffmpeg.exe"
     fake_ffmpeg.touch()
@@ -266,6 +359,85 @@ def test_video_optimizer_cancel_during_as_completed(tmp_path):
     with patch.object(VideoOptimizer, "optimize_single_video", side_effect=mock_opt):
         res = optimizer.run(in_dir, tmp_path / "out", cancel_check=lambda: cancel_flag[0])
         assert res.total_files == 2
+
+
+def test_video_optimizer_init_auto_ensure(monkeypatch, tmp_path):
+    fake_ffmpeg = tmp_path / "ffmpeg.exe"
+    fake_ffmpeg.touch()
+
+    # When binaries initially None, calls ensure_binaries
+    with patch("media_optimizer.ffmpeg_tools.FFmpegResolver.get_ffmpeg", side_effect=[None, fake_ffmpeg]), \
+         patch("media_optimizer.ffmpeg_tools.FFmpegResolver.get_ffprobe", side_effect=[None, fake_ffmpeg]), \
+         patch("media_optimizer.ffmpeg_tools.FFmpegResolver.ensure_binaries", return_value=True) as mock_ensure:
+        opt = VideoOptimizer(dry_run=False, ffmpeg_path=None, ffprobe_path=None)
+        assert mock_ensure.called
+        assert opt.ffmpeg_exe == fake_ffmpeg
+
+
+def test_video_optimizer_same_src_and_dest(tmp_path):
+    fake_ffmpeg = tmp_path / "ffmpeg.exe"
+    fake_ffmpeg.touch()
+    optimizer = VideoOptimizer(ffmpeg_path=fake_ffmpeg, dry_run=True)
+
+    test_file = tmp_path / "clip.mov"
+    test_file.write_bytes(b"sample_content_123456")
+
+    orig_sz, new_sz = optimizer.optimize_single_video(test_file, test_file)
+    assert orig_sz == len(b"sample_content_123456")
+    assert new_sz < orig_sz
+
+
+def test_video_optimizer_find_videos_ignore_tmp_and_hidden(tmp_path):
+    vdir = tmp_path / "vids_ignore"
+    vdir.mkdir()
+    (vdir / "good.mp4").touch()
+    (vdir / "file.tmp").touch()
+    (vdir / "file.tmp.mp4").touch()
+    (vdir / ".hidden.mp4").touch()
+
+    optimizer = VideoOptimizer()
+    found = optimizer.find_videos(vdir)
+    assert len(found) == 1
+    assert found[0].name == "good.mp4"
+
+
+def test_video_optimizer_small_dimension_nvenc_fallback(tmp_path):
+    fake_ffmpeg = tmp_path / "ffmpeg.exe"
+    fake_ffmpeg.touch()
+    test_vid = tmp_path / "small.mov"
+    test_vid.write_bytes(b"1234567890")
+    dest_vid = tmp_path / "small_out.mov"
+
+    optimizer = VideoOptimizer(ffmpeg_path=fake_ffmpeg, codec="h264_nvenc")
+    mock_proc = MagicMock(pid=1001, returncode=0)
+    mock_proc.communicate.return_value = (b"", b"")
+
+    cmd_captured = []
+    def side_effect_p(cmd, *args, **kwargs):
+        cmd_captured.extend(cmd)
+        Path(cmd[-1]).write_bytes(b"small_done")
+        return mock_proc
+
+    with patch("subprocess.Popen", side_effect=side_effect_p), \
+         patch("media_optimizer.video_optimizer.probe_video") as mock_probe:
+        # Width/height < 144
+        mock_probe.return_value = VideoMetadata(width=100, height=100, fps=30.0)
+        optimizer.optimize_single_video(test_vid, dest_vid)
+        # Should have forced libx264 instead of h264_nvenc
+        assert "-c:v" in cmd_captured
+        idx = cmd_captured.index("-c:v")
+        assert cmd_captured[idx + 1] == "libx264"
+
+
+def test_video_optimizer_run_same_dest_protection(tmp_path):
+    in_dir = tmp_path / "run_same_dest"
+    in_dir.mkdir()
+    (in_dir / "clip.mov").write_bytes(b"content_123")
+
+    optimizer = VideoOptimizer(dry_run=True)
+    res = optimizer.run(in_dir, in_dir)
+    assert res.total_files == 1
+    assert res.optimized == 1
 
 
 

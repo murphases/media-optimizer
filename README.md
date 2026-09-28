@@ -48,7 +48,7 @@ Baixe a versão pronta para seu sistema operacional na aba [Releases](https://gi
 
 ### 🪟 Windows
 - **Executável Portátil:** Baixe `MediaOptimizer-Portable.zip`, descompacte e dê duplo clique em `MediaOptimizer.exe`. Não requer instalação.
-- **Instalador Oficial:** Baixe e execute `MediaOptimizer-Setup-v1.0.0.exe` para instalar no menu Iniciar com atalho na Área de Trabalho.
+- **Instalador Oficial:** Baixe e execute `MediaOptimizer-Setup-v1.1.0.exe` para instalar no menu Iniciar com atalho na Área de Trabalho.
 
 ### 🐧 Linux
 - **AppImage:**

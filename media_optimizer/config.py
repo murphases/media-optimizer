@@ -94,14 +94,13 @@ class ConfigManager:
 
     @classmethod
     def get_default_settings(cls) -> OptimizerSettings:
-        """Returns standard default settings with dynamically calculated directories."""
-        workspace = cls.get_default_workspace()
+        """Returns standard default settings with clean empty paths for user selection."""
         return OptimizerSettings(
-            input_dir=str(workspace / "Originais"),
-            converted_dir=str(workspace / "Convertidos" / "JPG"),
-            optimized_images_dir=str(workspace / "Otimizadas" / "JPG"),
-            optimized_videos_dir=str(workspace / "Otimizadas" / "MOV"),
-            logs_dir=str(workspace / "logs"),
+            input_dir="",
+            converted_dir="",
+            optimized_images_dir="",
+            optimized_videos_dir="",
+            logs_dir="",
         )
 
     def load(self) -> OptimizerSettings:
@@ -114,6 +113,18 @@ class ConfigManager:
             content = self.config_file.read_text(encoding="utf-8")
             data = json.loads(content)
             self.settings = OptimizerSettings.from_dict(data)
+            # Sanitize old legacy default paths that exposed user home directory
+            default_ws = str(self.get_default_workspace())
+            if self.settings.input_dir.startswith(default_ws):
+                self.settings.input_dir = ""
+            if self.settings.converted_dir.startswith(default_ws):
+                self.settings.converted_dir = ""
+            if self.settings.optimized_images_dir.startswith(default_ws):
+                self.settings.optimized_images_dir = ""
+            if self.settings.optimized_videos_dir.startswith(default_ws):
+                self.settings.optimized_videos_dir = ""
+            if self.settings.logs_dir.startswith(default_ws):
+                self.settings.logs_dir = ""
         except Exception:
             # Fallback to defaults on corrupted file
             self.settings = self.get_default_settings()

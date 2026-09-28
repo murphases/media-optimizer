@@ -8,9 +8,13 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
+import tarfile
+import urllib.request
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -29,9 +33,34 @@ class VideoMetadata:
     bitrate: int = 0
     rotation: int = 0
 
+    @property
+    def display_width(self) -> int:
+        """Visual width accounting for 90° or 270° display rotation."""
+        if abs(self.rotation) in (90, 270):
+            return self.height
+        return self.width
+
+    @property
+    def display_height(self) -> int:
+        """Visual height accounting for 90° or 270° display rotation."""
+        if abs(self.rotation) in (90, 270):
+            return self.width
+        return self.height
+
+    @property
+    def is_vertical(self) -> bool:
+        """Returns True if the video is displayed in portrait/vertical orientation."""
+        return self.display_height > self.display_width
+
 
 class FFmpegResolver:
     """Locates and manages FFmpeg/FFprobe binaries across platforms."""
+
+    FFMPEG_URLS = {
+        "windows": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip",
+        "linux": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz",
+        "darwin": "https://evermeet.cx/ffmpeg/getrelease/zip",
+    }
 
     @classmethod
     def get_binary_path(cls, binary_name: str) -> Optional[Path]:
@@ -39,7 +68,9 @@ class FFmpegResolver:
         Locates executable by checking:
         1. PyInstaller frozen bundled directory (_MEIPASS / executable folder).
         2. Application root /bin or /resources directory.
-        3. System PATH.
+        3. User cache directory (~/.media_optimizer/bin).
+        4. System PATH.
+        5. imageio_ffmpeg fallback.
         """
         suffix = ".exe" if sys.platform == "win32" else ""
         target_name = f"{binary_name}{suffix}"
@@ -71,15 +102,21 @@ class FFmpegResolver:
         if repo_resources.exists():
             return repo_resources
 
-        # 3. System PATH
+        # 3. User cache directory (~/.media_optimizer/bin)
+        user_cache = Path.home() / ".media_optimizer" / "bin" / target_name
+        if user_cache.exists():
+            return user_cache
+
+        # 4. System PATH
         which_path = shutil.which(binary_name)
         if which_path:
             return Path(which_path)
 
-        # 4. imageio_ffmpeg fallback if available
+        # 5. imageio_ffmpeg fallback if available
         if binary_name == "ffmpeg":
             try:
-                import imageio_ffmpeg
+                import importlib
+                imageio_ffmpeg = importlib.import_module("imageio_ffmpeg")
                 ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
                 if ffmpeg_path and Path(ffmpeg_path).exists():
                     return Path(ffmpeg_path)
@@ -96,6 +133,78 @@ class FFmpegResolver:
     def get_ffprobe(cls) -> Optional[Path]:
         return cls.get_binary_path("ffprobe")
 
+    @classmethod
+    def ensure_binaries(cls, target_dir: Optional[Path] = None) -> bool:
+        """
+        Ensures ffmpeg and ffprobe are available. If missing, attempts to copy from PATH
+        or download static builds for the current platform into target_dir.
+        """
+        if cls.get_ffmpeg() and cls.get_ffprobe():
+            return True
+
+        if target_dir is None:
+            repo_root = Path(__file__).resolve().parent.parent
+            target_dir = repo_root / "bin"
+
+        target_dir.mkdir(parents=True, exist_ok=True)
+        suffix = ".exe" if sys.platform == "win32" else ""
+        ffmpeg_target = target_dir / f"ffmpeg{suffix}"
+        ffprobe_target = target_dir / f"ffprobe{suffix}"
+
+        # 1. Try copy from system PATH if available
+        sys_ffmpeg = shutil.which("ffmpeg")
+        sys_ffprobe = shutil.which("ffprobe")
+        if sys_ffmpeg and sys_ffprobe:
+            try:
+                shutil.copy2(sys_ffmpeg, ffmpeg_target)
+                shutil.copy2(sys_ffprobe, ffprobe_target)
+                return True
+            except Exception:
+                pass
+
+        # 2. Download pre-compiled static release
+        current_os = platform.system().lower()
+        url = cls.FFMPEG_URLS.get(current_os)
+        if not url:
+            return False
+
+        archive_ext = ".zip" if "zip" in url else ".tar.xz"
+        archive_path = target_dir / f"ffmpeg_download{archive_ext}"
+
+        try:
+            urllib.request.urlretrieve(url, archive_path)
+
+            if archive_ext == ".zip":
+                with zipfile.ZipFile(archive_path, "r") as z:
+                    for member in z.namelist():
+                        fname = Path(member).name.lower()
+                        if fname in (f"ffmpeg{suffix}", f"ffprobe{suffix}"):
+                            data = z.read(member)
+                            dest = target_dir / Path(member).name
+                            dest.write_bytes(data)
+                            if sys.platform != "win32":
+                                dest.chmod(0o755)
+            else:
+                with tarfile.open(archive_path, "r:*") as t:
+                    for member in t.getmembers():
+                        fname = Path(member.name).name
+                        if fname in ("ffmpeg", "ffprobe"):
+                            f = t.extractfile(member)
+                            if f:
+                                dest = target_dir / fname
+                                dest.write_bytes(f.read())
+                                dest.chmod(0o755)
+
+            archive_path.unlink(missing_ok=True)
+            return ffmpeg_target.exists() and ffprobe_target.exists()
+        except Exception:
+            if archive_path.exists():
+                try:
+                    archive_path.unlink()
+                except Exception:
+                    pass
+            return False
+
 
 def probe_video(video_path: Path, ffprobe_exe: Optional[Path] = None) -> Optional[VideoMetadata]:
     """Inspects video file using ffprobe and extracts metadata."""
@@ -106,7 +215,8 @@ def probe_video(video_path: Path, ffprobe_exe: Optional[Path] = None) -> Optiona
     cmd = [
         str(probe),
         "-v", "error",
-        "-show_entries", "stream=width,height,r_frame_rate,avg_frame_rate,codec_name,codec_type:format=duration,bit_rate:stream_tags=rotate",
+        "-show_streams",
+        "-show_format",
         "-of", "json",
         str(video_path)
     ]
@@ -146,11 +256,39 @@ def probe_video(video_path: Path, ffprobe_exe: Optional[Path] = None) -> Optiona
                 except Exception:
                     meta.fps = 0.0
 
-                # Rotation tag
-                tags = stream.get("tags", {})
-                rotate = tags.get("rotate") or tags.get("rotation")
-                if rotate and str(rotate).isdigit():
-                    meta.rotation = int(rotate)
+                # Rotation detection: check side_data_list (Display Matrix) and tags
+                found_rotation = False
+                for side_data in stream.get("side_data_list", []):
+                    rot = side_data.get("rotation")
+                    if rot is not None:
+                        try:
+                            meta.rotation = int(round(float(rot)))
+                            found_rotation = True
+                            break
+                        except (ValueError, TypeError):
+                            pass
+
+                if not found_rotation:
+                    tags = stream.get("tags", {}) or {}
+                    for key, val in tags.items():
+                        if key.lower() in ("rotate", "rotation"):
+                            try:
+                                meta.rotation = int(round(float(val)))
+                                found_rotation = True
+                                break
+                            except (ValueError, TypeError):
+                                pass
+
+                if not found_rotation:
+                    fmt_tags = fmt.get("tags", {}) or {}
+                    for key, val in fmt_tags.items():
+                        if key.lower() in ("rotate", "rotation"):
+                            try:
+                                meta.rotation = int(round(float(val)))
+                                found_rotation = True
+                                break
+                            except (ValueError, TypeError):
+                                pass
 
             elif codec_type == "audio" and not meta.audio_codec:
                 meta.audio_codec = stream.get("codec_name", "")
@@ -190,7 +328,7 @@ def detect_best_video_encoder(ffmpeg_exe: Optional[Path] = None) -> str:
         cmd = [
             str(ffmpeg),
             "-y", "-hide_banner", "-loglevel", "error",
-            "-f", "lavfi", "-i", "nullsrc=s=64x64:d=0.1",
+            "-f", "lavfi", "-i", "nullsrc=s=256x256:d=0.1",
             "-c:v", encoder,
             "-f", "null", "-"
         ]
@@ -256,7 +394,7 @@ def build_video_conversion_command(
     ]
 
     # Video filters
-    vf_filters = [f"scale={target_w}:{target_h}:flags=lanczos"]
+    vf_filters = [f"scale={target_w}:{target_h}:flags=lanczos", "setsar=1"]
     if target_fps is not None and target_fps > 0:
         vf_filters.append(f"fps={target_fps}")
 
@@ -283,8 +421,8 @@ def build_video_conversion_command(
     # Audio codec
     cmd.extend(["-c:a", "aac", "-b:a", audio_bitrate])
 
-    # Streaming and metadata preservation
-    cmd.extend(["-movflags", "+faststart", "-map_metadata", "0"])
+    # Streaming, metadata preservation, and explicitly reset video rotation metadata
+    cmd.extend(["-movflags", "+faststart", "-map_metadata", "0", "-metadata:s:v:0", "rotate=0"])
 
     cmd.append(str(output_path))
     return cmd

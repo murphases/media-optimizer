@@ -30,9 +30,35 @@ def test_config_manager_defaults(tmp_path: Path):
     mgr = ConfigManager(config_path=cfg_file)
 
     defaults = mgr.get_default_settings()
-    assert "Originais" in defaults.input_dir
+    assert defaults.input_dir == ""
+    assert defaults.converted_dir == ""
     assert defaults.convert_quality == 95
     assert defaults.opt_image_max_dim == 1350
+
+
+def test_config_manager_load_cleans_legacy_workspace_paths(monkeypatch, tmp_path: Path):
+    import json
+    fake_home = tmp_path / "legacy_user"
+    fake_pictures = fake_home / "Pictures"
+    fake_pictures.mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", lambda: fake_home)
+    ws = fake_home / "Pictures" / "MediaOptimizer"
+    cfg_file = tmp_path / "cfg.json"
+    data = {
+        "input_dir": str(ws / "Originais"),
+        "converted_dir": str(ws / "Convertidos" / "JPG"),
+        "optimized_images_dir": str(ws / "Otimizadas" / "JPG"),
+        "optimized_videos_dir": str(ws / "Otimizadas" / "MOV"),
+        "logs_dir": str(ws / "logs"),
+    }
+    cfg_file.write_text(json.dumps(data), encoding="utf-8")
+    mgr = ConfigManager(config_path=cfg_file)
+    loaded = mgr.load()
+    assert loaded.input_dir == ""
+    assert loaded.converted_dir == ""
+    assert loaded.optimized_images_dir == ""
+    assert loaded.optimized_videos_dir == ""
+    assert loaded.logs_dir == ""
 
 
 def test_config_manager_save_and_load(tmp_path: Path):
@@ -58,6 +84,13 @@ def test_config_manager_load_corrupted_fallback(tmp_path: Path):
     mgr = ConfigManager(config_path=cfg_file)
     loaded = mgr.load()
     assert loaded.convert_quality == 95  # Fallback default
+
+
+def test_config_manager_load_non_existent(tmp_path: Path):
+    cfg_file = tmp_path / "does_not_exist_at_all.json"
+    mgr = ConfigManager(config_path=cfg_file)
+    loaded = mgr.load()
+    assert loaded.convert_quality == 95
 
 
 def test_config_manager_reset_defaults(tmp_path: Path):

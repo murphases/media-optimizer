@@ -52,7 +52,7 @@ Nossa missão é fornecer uma **ferramenta desktop moderna, acessível, segura e
 
 ## 🗺️ 5. Roadmap de Produto
 
-### Fase 1 (Versão Atual - v1.0.0)
+### Fase 1 (Versão Atual - v1.1.0)
 - [x] Motor desacoplado com suporte a imagens HEIC, RAW, AVIF, PNG, JPG.
 - [x] Otimização inteligente de vídeos com capping de FPS e aceleração universal (NVIDIA NVENC, AMD AMF/VAAPI, Intel QSV, Apple VideoToolbox e CPU libx264).
 - [x] Interface gráfica moderna CustomTkinter com temas Claro/Escuro/Sistema.

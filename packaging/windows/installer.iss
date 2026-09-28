@@ -1,6 +1,6 @@
 ; Script Inno Setup para Media Optimizer
 #define MyAppName "Media Optimizer"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "murphases"
 #define MyAppURL "https://github.com/murphases/media-optimizer"
 #define MyAppExeName "MediaOptimizer.exe"

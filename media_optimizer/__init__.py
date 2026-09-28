@@ -3,7 +3,7 @@ Media Optimizer - Professional Photo and Video Converter & Optimizer.
 High performance, atomic writes, hardware acceleration, zero setup.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __author__ = "Paulo / murphases"
 __license__ = "PolyForm Noncommercial 1.0.0"
 

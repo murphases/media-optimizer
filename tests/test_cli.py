@@ -16,6 +16,16 @@ def test_build_parser():
     assert args.dry_run is True
 
 
+def test_cli_version_flag(capsys):
+    from media_optimizer import __version__
+    parser = build_parser()
+    with pytest.raises(SystemExit) as exc_info:
+        parser.parse_args(["--version"])
+    assert exc_info.value.code == 0
+    captured = capsys.readouterr()
+    assert f"Media Optimizer v{__version__}" in captured.out
+
+
 def test_print_telemetry(capsys):
     print_telemetry()
     captured = capsys.readouterr()

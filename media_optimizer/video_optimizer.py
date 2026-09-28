@@ -85,6 +85,14 @@ class VideoOptimizer:
         self.ffmpeg_exe = ffmpeg_path or FFmpegResolver.get_ffmpeg()
         self.ffprobe_exe = ffprobe_path or FFmpegResolver.get_ffprobe()
 
+        if (not self.ffmpeg_exe or not self.ffprobe_exe) and not self.dry_run:
+            try:
+                if FFmpegResolver.ensure_binaries():
+                    self.ffmpeg_exe = self.ffmpeg_exe or FFmpegResolver.get_ffmpeg()
+                    self.ffprobe_exe = self.ffprobe_exe or FFmpegResolver.get_ffprobe()
+            except Exception:
+                pass
+
         if self.codec_preference == "auto":
             self.active_encoder = detect_best_video_encoder(self.ffmpeg_exe)
         else:
@@ -97,6 +105,8 @@ class VideoOptimizer:
         found: List[Path] = []
         for root, _, files in os.walk(input_dir):
             for file in files:
+                if ".tmp" in file or file.startswith("."):
+                    continue
                 if Path(file).suffix.lower() in SUPPORTED_VIDEO_EXTENSIONS:
                     found.append(Path(root) / file)
         return sorted(found)
@@ -110,6 +120,10 @@ class VideoOptimizer:
         Optimizes a single video file using FFmpeg with atomic output.
         Returns tuple of (original_size_bytes, optimized_size_bytes).
         """
+        # Strict origin immutability
+        if dest_path.resolve() == src_path.resolve():
+            dest_path = dest_path.with_name(f"{dest_path.stem}_opt{dest_path.suffix}")
+
         orig_size = src_path.stat().st_size
         if self.skip_existing and dest_path.exists() and dest_path.stat().st_size > 0:
             return (orig_size, dest_path.stat().st_size)
@@ -131,18 +145,25 @@ class VideoOptimizer:
             # Probe video metadata
             meta = probe_video(src_path, self.ffprobe_exe)
             if meta and meta.width > 0 and meta.height > 0:
-                target_w, target_h = calculate_target_dimensions(meta.width, meta.height, self.max_dim)
+                target_w, target_h = calculate_target_dimensions(
+                    meta.display_width, meta.display_height, self.max_dim
+                )
                 target_fps = self.max_fps if meta.fps > self.max_fps else None
             else:
-                # Fallback conservative values
-                target_w, target_h = (1920, 1080)
+                # Fallback conservative values respecting max_dim
+                target_w, target_h = calculate_target_dimensions(1920, 1080, self.max_dim)
                 target_fps = self.max_fps
+
+            # Hardware encoders (NVENC, AMF) require minimum dimension of 144x144
+            file_encoder = self.active_encoder
+            if (target_w < 144 or target_h < 144) and file_encoder != "libx264":
+                file_encoder = "libx264"
 
             cmd = build_video_conversion_command(
                 ffmpeg_exe=self.ffmpeg_exe,
                 input_path=src_path,
                 output_path=temp_path,
-                encoder=self.active_encoder,
+                encoder=file_encoder,
                 target_w=target_w,
                 target_h=target_h,
                 target_fps=target_fps,
@@ -166,9 +187,9 @@ class VideoOptimizer:
             _, stderr = proc.communicate()
 
             # If hardware encoder failed, try fallback to libx264
-            if proc.returncode != 0 and self.active_encoder != "libx264":
+            if proc.returncode != 0 and file_encoder != "libx264":
                 self.logger.warning(
-                    f"Falha no encoder {self.active_encoder} em {src_path.name}. Tentando fallback para libx264..."
+                    f"Falha no encoder {file_encoder} em {src_path.name}. Tentando fallback para libx264..."
                 )
                 cmd = build_video_conversion_command(
                     ffmpeg_exe=self.ffmpeg_exe,
@@ -196,15 +217,15 @@ class VideoOptimizer:
                 err_msg = stderr.decode("utf-8", errors="replace").strip()
                 raise RuntimeError(f"FFmpeg falhou (código {proc.returncode}): {err_msg[:300]}")
 
-            # Preserve original timestamps
-            try:
-                os.utime(temp_path, (orig_atime, orig_mtime))
-            except Exception:
-                pass
-
             if dest_path.exists():
                 dest_path.unlink()
             temp_path.rename(dest_path)
+
+            # Preserve original timestamps on final output file
+            try:
+                os.utime(dest_path, (orig_atime, orig_mtime))
+            except Exception:
+                pass
 
             new_size = dest_path.stat().st_size
             return (orig_size, new_size)
@@ -246,6 +267,8 @@ class VideoOptimizer:
                 except ValueError:
                     rel_path = Path(src_path.name)
                 dest_path = (output_dir / rel_path).with_suffix(ext_target)
+                if dest_path.resolve() == src_path.resolve():
+                    dest_path = dest_path.with_name(f"{dest_path.stem}_opt{dest_path.suffix}")
 
                 if self.skip_existing and dest_path.exists() and dest_path.stat().st_size > 0:
                     result.skipped += 1

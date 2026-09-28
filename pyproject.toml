@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "media-optimizer"
-version = "1.0.0"
+version = "1.1.0"
 description = "Otimizador Profissional de Fotos e Vídeos (Zero Setup, Alta Performance)"
 readme = "README.md"
 requires-python = ">=3.10"

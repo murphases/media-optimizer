@@ -85,6 +85,8 @@ class PipelineOrchestrator:
     def run_stage_1(
         self,
         progress_cb: Optional[Callable[[int, int, str], None]] = None,
+        input_dir: Optional[Path] = None,
+        output_dir: Optional[Path] = None,
     ) -> ConversionResult:
         """Executes Stage 1: Convert raw/diverse images to standard JPG."""
         converter = ImageConverter(
@@ -102,8 +104,8 @@ class PipelineOrchestrator:
                 progress_cb(curr, tot, name)
 
         return converter.run(
-            input_dir=Path(self.settings.input_dir),
-            output_dir=Path(self.settings.converted_dir),
+            input_dir=input_dir if input_dir is not None else Path(self.settings.input_dir),
+            output_dir=output_dir if output_dir is not None else Path(self.settings.converted_dir),
             progress_callback=checked_progress,
             cancel_check=self.is_cancelled,
         )
@@ -111,6 +113,8 @@ class PipelineOrchestrator:
     def run_stage_2(
         self,
         progress_cb: Optional[Callable[[int, int, str], None]] = None,
+        input_dir: Optional[Path] = None,
+        output_dir: Optional[Path] = None,
     ) -> OptimizationResult:
         """Executes Stage 2: Optimize and resize images."""
         optimizer = ImageOptimizer(
@@ -129,8 +133,8 @@ class PipelineOrchestrator:
                 progress_cb(curr, tot, name)
 
         return optimizer.run(
-            input_dir=Path(self.settings.converted_dir),
-            output_dir=Path(self.settings.optimized_images_dir),
+            input_dir=input_dir if input_dir is not None else Path(self.settings.converted_dir),
+            output_dir=output_dir if output_dir is not None else Path(self.settings.optimized_images_dir),
             progress_callback=checked_progress,
             cancel_check=self.is_cancelled,
         )
@@ -138,6 +142,8 @@ class PipelineOrchestrator:
     def run_stage_3(
         self,
         progress_cb: Optional[Callable[[int, int, str], None]] = None,
+        input_dir: Optional[Path] = None,
+        output_dir: Optional[Path] = None,
     ) -> VideoOptimizationResult:
         """Executes Stage 3: Optimize videos."""
         optimizer = VideoOptimizer(
@@ -159,8 +165,8 @@ class PipelineOrchestrator:
                 progress_cb(curr, tot, name)
 
         return optimizer.run(
-            input_dir=Path(self.settings.input_dir),
-            output_dir=Path(self.settings.optimized_videos_dir),
+            input_dir=input_dir if input_dir is not None else Path(self.settings.input_dir),
+            output_dir=output_dir if output_dir is not None else Path(self.settings.optimized_videos_dir),
             progress_callback=checked_progress,
             cancel_check=self.is_cancelled,
         )

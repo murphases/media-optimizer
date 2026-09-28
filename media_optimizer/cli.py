@@ -10,6 +10,7 @@ import logging
 import sys
 from pathlib import Path
 
+from media_optimizer import __version__
 from media_optimizer.config import ConfigManager, OptimizerSettings
 from media_optimizer.hardware import HardwareMonitor, format_bytes, format_time
 from media_optimizer.pipeline import PipelineOrchestrator
@@ -63,7 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--version", "-v",
         action="version",
-        version="Media Optimizer v1.0.0",
+        version=f"Media Optimizer v{__version__}",
     )
     return parser
 
